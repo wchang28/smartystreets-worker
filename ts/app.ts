@@ -7,12 +7,24 @@ import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
 import {aggregate} from "object-aggregate-stream"
 import {USStreetAddress} from "smartystreets-types";
+import {normalize} from "./smartystreets-us-addr-normalization-stream"
 
+let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
+let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
+console.log("AUTH_ID=" + AUTH_ID);
+console.log("AUTH_TOKEN=" + AUTH_TOKEN);
+
+/*
 AWS.config.credentials = new AWS.SharedIniFileCredentials({profile: "zzyzx"});
 let Bucket = "ksfglfgnfg";
 let Key = "fslghlfgs.csv";
+*/
 
-let FilePath = "xxxyyyzzzwww.csv";
+let FilePath = process.argv[2];
+if (!FilePath) {
+    console.error("csv file path is not optional");
+    process.exit(1);
+}
 
 function getS3SignedUrl(Bucket: string, Key: string) : Promise<string> {
     return new Promise<string>((resolve: (value: string) => void, reject: (err: any) => void) => {
@@ -76,31 +88,45 @@ getFileStream(FilePath)
     }).on("end", () => {
         console.log("csvParser: <<END>>");
     });
-
-    ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
-        console.log(JSON.stringify(qpi));
-    }).on("finish", () => {
-        console.log("ssreqts: <<FINISH>>");
-    }).on("end", () => {
-        console.log("ssreqts: <<END>>");
-        console.log("Transformed = " + ssreqts.Transformed);
-    });
     */
 
+    ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
+        //console.log(JSON.stringify(qpi));
+    }).on("finish", () => {
+        //console.log("ssreqts: <<FINISH>>");
+    }).on("end", () => {
+        //console.log("ssreqts: <<END>>");
+        console.log("Transformed = " + ssreqts.Transformed);
+    });
+    
     let aggregateStream = aggregate(100);
+    /*
     let count = 0;
     aggregateStream.on("data", (qpis: USStreetAddress.QueryParamsItem[]) => {
         console.log(JSON.stringify(qpis, null, 2));
         //console.log(qpis.length);
         count += qpis.length;
     }).on("finish", () => {
-        console.log("as: <<FINISH>>");
+        console.log("aggregateStream: <<FINISH>>");
     }).on("end", () => {
-        console.log("as: <<END>>");
+        console.log("aggregateStream: <<END>>");
         console.log("count = " + count);
     });
+    */
 
-    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream);
+
+    let normalizationStream = normalize();
+
+    normalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
+        //console.log(JSON.stringify(result, null, 2));
+        console.log(result.length);
+    }).on("finish", () => {
+        console.log("normalizationStream: <<FINISH>>");
+    }).on("end", () => {
+        console.log("normalizationStream: <<END>>");
+    });
+
+    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream).pipe(normalizationStream);
 }).catch((err: any) => {
     console.log("!!! Error: " + JSON.stringify(err));
     process.exit(0);
