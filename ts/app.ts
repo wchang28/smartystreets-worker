@@ -128,8 +128,8 @@ getFileStream(FilePath)
     let normalizationStream = normalize();
 
     normalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
-        //console.log(JSON.stringify(result, null, 2));
-        console.log(result.length);
+        console.log(JSON.stringify(result, null, 2));
+        //console.log(result.length);
     }).on("finish", () => {
         console.log("normalizationStream: <<FINISH>>");
     }).on("end", () => {
