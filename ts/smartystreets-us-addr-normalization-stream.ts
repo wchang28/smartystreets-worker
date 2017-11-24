@@ -4,12 +4,11 @@ import {USStreetAddress} from "smartystreets-types";
 import * as request from "request";
 import JSONStream = require('JSONStream');
 
-let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
-let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
-
-function transformer(query: USStreetAddress.QueryParamsItem[]) : Promise<USStreetAddress.QueryResult> {
+export function normalize_query(query: USStreetAddress.QueryParamsItem[]) : Promise<USStreetAddress.QueryResult> {
     return new Promise<USStreetAddress.QueryResult>((resolve: (value: USStreetAddress.QueryResult) => void, reject: (err: any) => void) => {
-        let url = "https://us-street.api.smartystreets.com/street-address?auth-id=" + AUTH_ID +"&auth-token=" + AUTH_TOKEN;
+        let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
+        let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
+        let url = "https://us-street.api.smartystreets.com/street-address?auth-id=" + AUTH_ID + "&auth-token=" + AUTH_TOKEN;
         let result: USStreetAddress.QueryResult = [];
         let jsonParse: Transform = JSONStream.parse('*');
         let req = request.post(url, {json: query});
@@ -26,5 +25,5 @@ function transformer(query: USStreetAddress.QueryParamsItem[]) : Promise<USStree
 }
 
 export function normalize(): Transform {
-    return new ObjectTransformStream<USStreetAddress.QueryParamsItem[], USStreetAddress.QueryResult>(transformer);
+    return new ObjectTransformStream<USStreetAddress.QueryParamsItem[], USStreetAddress.QueryResult>(normalize_query);
 }
