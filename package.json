@@ -12,6 +12,7 @@
     "aws-sdk": "^2.156.0",
     "csv": "^2.0.0",
     "node-http-blob-stream": "https://github.com/wchang28/node-http-blob-stream.git",
+    "object-aggregate-stream": "https://github.com/wchang28/object-aggregate-stream.git",
     "object-transform-stream": "https://github.com/wchang28/object-transform-stream.git",
     "smartystreets-types": "https://github.com/wchang28/smartystreets-types.git"
   }
