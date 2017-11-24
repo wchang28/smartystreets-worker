@@ -26,6 +26,16 @@ if (!FilePath) {
     process.exit(1);
 }
 
+if (!AUTH_ID) {
+    console.error("env. var. SMARTYSTREETS_AUTH_ID is not set");
+    process.exit(1);  
+}
+
+if (!AUTH_TOKEN) {
+    console.error("env. var. SMARTYSTREETS_AUTH_TOKEN is not set");
+    process.exit(1);  
+}
+
 function getS3SignedUrl(Bucket: string, Key: string) : Promise<string> {
     return new Promise<string>((resolve: (value: string) => void, reject: (err: any) => void) => {
         let s3 = new S3();
