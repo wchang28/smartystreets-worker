@@ -7,7 +7,7 @@ import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
 import {aggregate} from "object-aggregate-stream"
 import {USStreetAddress} from "smartystreets-types";
-import {normalize} from "./smartystreets-us-addr-normalization-stream"
+import {normalize, normalize_query, multi_normalize} from "./smartystreets-us-addr-normalization-stream"
 
 let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
 let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
@@ -89,17 +89,17 @@ let ssreqts = new ObjectTransformStream<string[], USStreetAddress.QueryParamsIte
     return Promise.resolve<boolean>(include);
 })
 
+/*
 getFileStream(FilePath)
 .then((rs: Readable) => {
     let csvParser: Transform = csv.parse();
-    /*
-    csvParser.on("fisish", () => {
-        console.log("csvParser: <<FINISH>>");
-    }).on("end", () => {
-        console.log("csvParser: <<END>>");
-    });
-    */
-
+    
+    //csvParser.on("fisish", () => {
+    //    console.log("csvParser: <<FINISH>>");
+    //}).on("end", () => {
+    //    console.log("csvParser: <<END>>");
+    //});
+    
     ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
         //console.log(JSON.stringify(qpi));
     }).on("finish", () => {
@@ -110,34 +110,112 @@ getFileStream(FilePath)
     });
     
     let aggregateStream = aggregate(100);
-    /*
-    let count = 0;
-    aggregateStream.on("data", (qpis: USStreetAddress.QueryParamsItem[]) => {
-        console.log(JSON.stringify(qpis, null, 2));
-        //console.log(qpis.length);
-        count += qpis.length;
-    }).on("finish", () => {
-        console.log("aggregateStream: <<FINISH>>");
-    }).on("end", () => {
-        console.log("aggregateStream: <<END>>");
-        console.log("count = " + count);
-    });
-    */
-
-
+    //let count = 0;
+    //aggregateStream.on("data", (query: USStreetAddress.QueryParamsItem[]) => {
+    //    console.log(JSON.stringify(query, null, 2));
+        //console.log(query.length);
+    //    count += query.length;
+    //}).on("finish", () => {
+    //    console.log("aggregateStream: <<FINISH>>");
+    //}).on("end", () => {
+    //    console.log("aggregateStream: <<END>>");
+    //    console.log("count = " + count);
+    //});
+    
     let normalizationStream = normalize();
 
+    let count = 0;
     normalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
-        console.log(JSON.stringify(result, null, 2));
-        //console.log(result.length);
+        //console.log(JSON.stringify(result, null, 2));
+        console.log(result.length);
+        count += result.length;
     }).on("finish", () => {
         console.log("normalizationStream: <<FINISH>>");
     }).on("end", () => {
         console.log("normalizationStream: <<END>>");
+        console.log("count=" + count);
     });
 
     rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream).pipe(normalizationStream);
 }).catch((err: any) => {
-    console.log("!!! Error: " + JSON.stringify(err));
-    process.exit(0);
-})
+    console.error("!!! Error: " + JSON.stringify(err));
+    process.exit(1);
+});
+*/
+
+getFileStream(FilePath)
+.then((rs: Readable) => {
+    let csvParser: Transform = csv.parse();
+    let aggregateStream1 = aggregate(100);
+    let aggregateStream2 = aggregate(20);
+
+    ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
+        //console.log(JSON.stringify(qpi));
+    }).on("finish", () => {
+        //console.log("ssreqts: <<FINISH>>");
+    }).on("end", () => {
+        //console.log("ssreqts: <<END>>");
+        console.log("Transformed = " + ssreqts.Transformed);
+    });
+    
+
+    //let count = 0;
+    //aggregateStream2.on("data", (queries: USStreetAddress.QueryParamsItem[][]) => {
+        //console.log(JSON.stringify(qpis, null, 2));
+    //}).on("finish", () => {
+    //    console.log("aggregateStream2: <<FINISH>>");
+    //}).on("end", () => {
+    //    console.log("aggregateStream2: <<END>>");
+    //    console.log("count = " + count);
+    //});
+    
+    let multiNormalizationStream = multi_normalize();
+    let count = 0;
+    multiNormalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
+        //console.log(JSON.stringify(result, null, 2));
+        console.log(result.length);
+        count += result.length;
+    }).on("finish", () => {
+        console.log("multiNormalizationStream: <<FINISH>>");
+    }).on("end", () => {
+        console.log("multiNormalizationStream: <<END>>");
+        console.log("count=" + count);
+    });
+
+    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream1).pipe(aggregateStream2).pipe(multiNormalizationStream);
+}).catch((err: any) => {
+    console.error("!!! Error: " + JSON.stringify(err));
+    process.exit(1);
+});
+
+/*
+getFileStream(FilePath)
+.then((rs: Readable) => {
+    let csvParser: Transform = csv.parse();
+    let aggregateStream = aggregate(100);
+
+    let promises:Promise<USStreetAddress.QueryResult>[] = []; 
+
+    aggregateStream.on("data", (query: USStreetAddress.QueryParamsItem[]) => {
+        promises.push(normalize_query(query));
+    }).on("finish", () => {
+        console.log("aggregateStream: <<FINISH>>");
+    }).on("end", () => {
+        console.log("aggregateStream: <<END>>");
+        console.log("count = " + promises.length);
+        let p = Promise.all(promises);
+        p.then((value: USStreetAddress.QueryResult[]) => {
+            console.log(JSON.stringify(value, null, 2));
+            //process.exit(0);
+        }).catch((err: any) => {
+            console.error("!!! Error: " + JSON.stringify(err));
+            process.exit(1);
+        })
+    });
+
+    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream);
+}).catch((err: any) => {
+    console.error("!!! Error: " + JSON.stringify(err));
+    process.exit(1);
+});
+*/

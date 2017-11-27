@@ -27,3 +27,26 @@ export function normalize_query(query: USStreetAddress.QueryParamsItem[]) : Prom
 export function normalize(): Transform {
     return new ObjectTransformStream<USStreetAddress.QueryParamsItem[], USStreetAddress.QueryResult>(normalize_query);
 }
+
+export function multi_normalize_query(queries: USStreetAddress.QueryParamsItem[][]) : Promise<USStreetAddress.QueryResult> {
+    let promises:Promise<USStreetAddress.QueryResult>[] = []; 
+    for (let i in queries) {
+        let query = queries[i];
+        promises.push(normalize_query(query));
+    }
+    let p = Promise.all(promises);  
+    return p.then((value: USStreetAddress.QueryResult[]) => {
+        let ret : USStreetAddress.QueryResult = [];
+        for (let i in value) {
+            for (let j in value[i]) {
+                let item = value[i][j];
+                ret.push(item);
+            }
+        }
+        return ret;
+    });
+}
+
+export function multi_normalize(): Transform {
+    return new ObjectTransformStream<USStreetAddress.QueryParamsItem[][], USStreetAddress.QueryResult>(multi_normalize_query);
+}
