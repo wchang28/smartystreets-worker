@@ -5,7 +5,7 @@ import {Readable, Transform} from "stream";
 import {get as getHTTPBlob, ReadableContent} from "node-http-blob-stream";
 import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
-import {aggregate} from "object-aggregate-stream"
+import {aggregate} from "object-aggregate-stream";
 import {USStreetAddress} from "smartystreets-types";
 import {normalize, normalize_query, multi_normalize} from "./smartystreets-us-addr-normalization-stream"
 
