@@ -1,13 +1,14 @@
 import * as AWS from "aws-sdk";
 import * as fs from "fs";
 import {S3} from "aws-sdk";
+import * as url from "url";
 import {Readable, Transform} from "stream";
 import {get as getHTTPBlob, ReadableContent} from "node-http-blob-stream";
 import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
 import {aggregate, un_aggregate} from "object-aggregate-stream";
 import {USStreetAddress} from "smartystreets-types";
-import {NormalizationResult, normalize, normalize_query, concurrent_normalize} from "./smartystreets-us-addr-normalization-stream"
+import {NormalizationResult, normalize, normalize_query, concurrent_normalize} from "./smartystreets-us-addr-normalization-stream";
 
 let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
 let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
@@ -49,7 +50,7 @@ function getS3SignedUrl(Bucket: string, Key: string) : Promise<string> {
 }
 
 function getFileStream(filePath: string) : Promise<Readable> {return Promise.resolve<Readable>(fs.createReadStream(filePath));}
-function getS3FileStream(Bucket, Key) : Promise<Readable> {return getS3SignedUrl(Bucket, Key).then((url: string) => getHTTPBlob(url)).then((rc: ReadableContent<Readable>) => Promise.resolve<Readable>(rc.readable));}
+function getS3FileStream(Bucket: string, Key: string) : Promise<Readable> {return getS3SignedUrl(Bucket, Key).then((url: string) => getHTTPBlob(url)).then((rc: ReadableContent<Readable>) => Promise.resolve<Readable>(rc.readable));}
 
 let ColumnIndices: {[column: string]: number} = {
     "id": 0
@@ -107,7 +108,7 @@ let progressRecorderStream = new ObjectTransformStream<NormalizationResult, USSt
     return Promise.resolve<USStreetAddress.QueryResultItem[]>(result.QueryResult);
 });
 
-let csvOutputHeaders: string[ ] =[
+let csvOutputHeaders: string[] = [
     "Id"
     ,"delivery_line_1"
     ,"delivery_line_2"
@@ -321,35 +322,3 @@ getFileStream(FilePath)
     console.error("!!! Error: " + JSON.stringify(err));
     process.exit(1);
 });
-
-/*
-getFileStream(FilePath)
-.then((rs: Readable) => {
-    let csvParser: Transform = csv.parse();
-    let aggregateStream = aggregate(100);
-
-    let promises:Promise<USStreetAddress.QueryResult>[] = []; 
-
-    aggregateStream.on("data", (query: USStreetAddress.QueryParamsItem[]) => {
-        promises.push(normalize_query(query));
-    }).on("finish", () => {
-        console.log("aggregateStream: <<FINISH>>");
-    }).on("end", () => {
-        console.log("aggregateStream: <<END>>");
-        console.log("count = " + promises.length);
-        let p = Promise.all(promises);
-        p.then((value: USStreetAddress.QueryResult[]) => {
-            console.log(JSON.stringify(value, null, 2));
-            //process.exit(0);
-        }).catch((err: any) => {
-            console.error("!!! Error: " + JSON.stringify(err));
-            process.exit(1);
-        })
-    });
-
-    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream);
-}).catch((err: any) => {
-    console.error("!!! Error: " + JSON.stringify(err));
-    process.exit(1);
-});
-*/
