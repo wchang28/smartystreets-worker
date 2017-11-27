@@ -7,7 +7,7 @@ import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
 import {aggregate, un_aggregate} from "object-aggregate-stream";
 import {USStreetAddress} from "smartystreets-types";
-import {normalize, normalize_query, multi_normalize} from "./smartystreets-us-addr-normalization-stream"
+import {NormalizationResult, normalize, normalize_query, concurrent_normalize} from "./smartystreets-us-addr-normalization-stream"
 
 let AUTH_ID = process.env["SMARTYSTREETS_AUTH_ID"];
 let AUTH_TOKEN = process.env["SMARTYSTREETS_AUTH_TOKEN"];
@@ -87,6 +87,24 @@ let ssreqts = new ObjectTransformStream<string[], USStreetAddress.QueryParamsIte
         }
     }
     return Promise.resolve<boolean>(include);
+});
+
+let requestAnalyzingStream = new ObjectTransformStream<USStreetAddress.QueryParamsItem[][], USStreetAddress.QueryParamsItem[][]>((input: USStreetAddress.QueryParamsItem[][]) => {
+    let count = 0;
+    for (let i in input) {
+        count += input[i].length;
+    }
+    console.log("<REQUEST>: " + count);
+    // TODO: write to database
+    return Promise.resolve<USStreetAddress.QueryParamsItem[][]>(input);
+});
+
+let progressRecorderStream = new ObjectTransformStream<NormalizationResult, USStreetAddress.QueryResultItem[]>((result: NormalizationResult) => {
+    let RequestCount = result.RequestCount;
+    let NormalizedCount = result.QueryResult.length;
+    console.log("<PROGRESS>:" + [RequestCount, NormalizedCount].join(","));
+    // TODO: write to database
+    return Promise.resolve<USStreetAddress.QueryResultItem[]>(result.QueryResult);
 });
 
 let csvOutputHeaders: string[ ] =[
@@ -225,17 +243,17 @@ getFileStream(FilePath)
     let csvParser: Transform = csv.parse();
     let aggregateStream1 = aggregate(100);
     let aggregateStream2 = aggregate(20);
-    let multiNormalizationStream = multi_normalize();
+    let concurrentNormalizationStream = concurrent_normalize();
     let unAggregateStream = un_aggregate();
     
-    ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
+    //ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
         //console.log(JSON.stringify(qpi));
-    }).on("finish", () => {
+    //}).on("finish", () => {
         //console.log("ssreqts: <<FINISH>>");
-    }).on("end", () => {
+    //}).on("end", () => {
         //console.log("ssreqts: <<END>>");
-        console.log("Transformed = " + ssreqts.Transformed);
-    });
+    //    console.log("Transformed = " + ssreqts.Transformed);
+    //});
     
     //let count = 0;
     //aggregateStream2.on("data", (queries: USStreetAddress.QueryParamsItem[][]) => {
@@ -248,14 +266,14 @@ getFileStream(FilePath)
     //});
         
     let count = 0;
-    multiNormalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
+    concurrentNormalizationStream.on("data", (result: NormalizationResult) => {
         //console.log(JSON.stringify(result, null, 2));
-        console.log(result.length);
-        count += result.length;
+        //console.log([result.RequestCount,result.QueryResult.length].join(","));
+        count += result.QueryResult.length;
     }).on("finish", () => {
-        console.log("multiNormalizationStream: <<FINISH>>");
+        console.log("concurrentNormalizationStream: <<FINISH>>");
     }).on("end", () => {
-        console.log("multiNormalizationStream: <<END>>");
+        console.log("concurrentNormalizationStream: <<END>>");
         console.log("count=" + count);
     });
 
@@ -283,8 +301,8 @@ getFileStream(FilePath)
     });
     */
 
-    let csv_stringifier: Transform = csv.stringify();
-    csv_stringifier.write(csvOutputHeaders);
+    let csvStringifier: Transform = csv.stringify();
+    csvStringifier.write(csvOutputHeaders);
 
     let ws = fs.createWriteStream("c:/tmp/output.csv");
 
@@ -292,10 +310,12 @@ getFileStream(FilePath)
     .pipe(ssreqts)
     .pipe(aggregateStream1)
     .pipe(aggregateStream2)
-    .pipe(multiNormalizationStream)
+    .pipe(requestAnalyzingStream)
+    .pipe(concurrentNormalizationStream)
+    .pipe(progressRecorderStream)
     .pipe(unAggregateStream)
     .pipe(qri2RowStream)
-    .pipe(csv_stringifier)
+    .pipe(csvStringifier)
     .pipe(ws);
 }).catch((err: any) => {
     console.error("!!! Error: " + JSON.stringify(err));
