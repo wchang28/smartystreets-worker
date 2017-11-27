@@ -5,7 +5,7 @@ import {Readable, Transform} from "stream";
 import {get as getHTTPBlob, ReadableContent} from "node-http-blob-stream";
 import csv = require('csv');
 import {ObjectTransformStream} from "object-transform-stream";
-import {aggregate} from "object-aggregate-stream";
+import {aggregate, un_aggregate} from "object-aggregate-stream";
 import {USStreetAddress} from "smartystreets-types";
 import {normalize, normalize_query, multi_normalize} from "./smartystreets-us-addr-normalization-stream"
 
@@ -87,7 +87,84 @@ let ssreqts = new ObjectTransformStream<string[], USStreetAddress.QueryParamsIte
         }
     }
     return Promise.resolve<boolean>(include);
-})
+});
+
+let csvOutputHeaders: string[ ] =[
+    "Id"
+    ,"delivery_line_1"
+    ,"delivery_line_2"
+    ,"last_line"
+    ,"delivery_point_barcode"
+    ,"components.primary_number"
+    ,"components.street_name"
+    ,"components.street_predirection"
+    ,"components.street_postdirection"
+    ,"components.street_suffix"
+    ,"components.secondary_number"
+    ,"components.secondary_designator"
+    ,"components.extra_secondary_number"
+    ,"components.extra_secondary_designator"
+    ,"components.pmb_designator"
+    ,"components.pmb_number"
+    ,"components.city_name"
+    ,"components.default_city_name"
+    ,"components.state_abbreviation"
+    ,"components.zipcode"
+    ,"components.plus4_code"
+    ,"components.delivery_point"
+    ,"components.delivery_point_check_digit"
+    ,"metadata.county_fips"
+    ,"metadata.county_name"
+    ,"metadata.carrier_route"
+    ,"metadata.congressional_district"
+    ,"metadata.rdi"
+    ,"metadata.latitude"
+    ,"metadata.longitude"
+    ,"metadata.precision"
+    ,"metadata.time_zone"
+    ,"metadata.utc_offset"
+    ,"metadata.dst"
+];
+
+let qri2RowStream = new ObjectTransformStream<USStreetAddress.QueryResultItem, string[]>((item: USStreetAddress.QueryResultItem) => {
+    let row: string[] = [
+        item.input_id ? item.input_id: ""
+        ,item.delivery_line_1 ? item.delivery_line_1 : ""
+        ,item.delivery_line_2 ? item.delivery_line_2 : ""
+        ,item.last_line ? item.last_line : ""
+        ,item.delivery_point_barcode ? item.delivery_point_barcode : ""
+        ,item.components && item.components.primary_number ? item.components.primary_number : ""
+        ,item.components && item.components.street_name ? item.components.street_name : ""
+        ,item.components && item.components.street_predirection ? item.components.street_predirection : ""
+        ,item.components && item.components.street_postdirection ? item.components.street_postdirection : ""
+        ,item.components && item.components.street_suffix ? item.components.street_suffix : ""
+        ,item.components && item.components.secondary_number ? item.components.secondary_number : ""
+        ,item.components && item.components.secondary_designator ? item.components.secondary_designator : ""
+        ,item.components && item.components.extra_secondary_number ? item.components.extra_secondary_number : ""
+        ,item.components && item.components.extra_secondary_designator ? item.components.extra_secondary_designator : ""
+        ,item.components && item.components.pmb_designator ? item.components.pmb_designator : ""
+        ,item.components && item.components.pmb_number ? item.components.pmb_number : ""
+        ,item.components && item.components.city_name ? item.components.city_name : ""
+        ,item.components && item.components.default_city_name ? item.components.default_city_name : ""
+        ,item.components && item.components.state_abbreviation ? item.components.state_abbreviation : ""
+        ,item.components && item.components.zipcode ? item.components.zipcode : ""
+        ,item.components && item.components.plus4_code ? item.components.plus4_code : ""
+        ,item.components && item.components.delivery_point ? item.components.delivery_point : ""
+        ,item.components && item.components.delivery_point_check_digit ? item.components.delivery_point_check_digit : ""
+        ,item.metadata && item.metadata.county_fips ? item.metadata.county_fips : ""
+        ,item.metadata && item.metadata.county_name ? item.metadata.county_name : ""
+        ,item.metadata && item.metadata.carrier_route ? item.metadata.carrier_route : ""
+        ,item.metadata && item.metadata.congressional_district ? item.metadata.congressional_district : ""
+        ,item.metadata && item.metadata.rdi ? item.metadata.rdi : ""
+        ,item.metadata && item.metadata.latitude ? item.metadata.latitude.toString() : ""
+        ,item.metadata && item.metadata.longitude ? item.metadata.longitude.toString() : ""
+        ,item.metadata && item.metadata.precision ? item.metadata.precision : ""
+        ,item.metadata && item.metadata.time_zone ? item.metadata.time_zone : ""
+        ,item.metadata && item.metadata.utc_offset ? item.metadata.utc_offset.toString() : ""
+        ,item.metadata && item.metadata.dst ? item.metadata.dst.toString() : ""
+    ];
+    return Promise.resolve<string[]>(row);
+});
 
 /*
 getFileStream(FilePath)
@@ -148,7 +225,9 @@ getFileStream(FilePath)
     let csvParser: Transform = csv.parse();
     let aggregateStream1 = aggregate(100);
     let aggregateStream2 = aggregate(20);
-
+    let multiNormalizationStream = multi_normalize();
+    let unAggregateStream = un_aggregate();
+    
     ssreqts.on("data", (qpi: USStreetAddress.QueryParamsItem) => {
         //console.log(JSON.stringify(qpi));
     }).on("finish", () => {
@@ -158,7 +237,6 @@ getFileStream(FilePath)
         console.log("Transformed = " + ssreqts.Transformed);
     });
     
-
     //let count = 0;
     //aggregateStream2.on("data", (queries: USStreetAddress.QueryParamsItem[][]) => {
         //console.log(JSON.stringify(qpis, null, 2));
@@ -168,8 +246,7 @@ getFileStream(FilePath)
     //    console.log("aggregateStream2: <<END>>");
     //    console.log("count = " + count);
     //});
-    
-    let multiNormalizationStream = multi_normalize();
+        
     let count = 0;
     multiNormalizationStream.on("data", (result: USStreetAddress.QueryResult) => {
         //console.log(JSON.stringify(result, null, 2));
@@ -182,7 +259,44 @@ getFileStream(FilePath)
         console.log("count=" + count);
     });
 
-    rs.pipe(csvParser).pipe(ssreqts).pipe(aggregateStream1).pipe(aggregateStream2).pipe(multiNormalizationStream);
+    /*
+    let count = 0;
+    unAggregateStream.on("data", (item: USStreetAddress.QueryResultItem) => {
+        count++;
+    }).on("finish", () => {
+        console.log("unAggregateStream: <<FINISH>>");
+    }).on("end", () => {
+        console.log("unAggregateStream: <<END>>");
+        console.log("count=" + count);
+    });
+    */
+    /*
+    let count = 0;
+    qri2RowStream.on("data", (row: string[]) => {
+        console.log(row);
+        count++;
+    }).on("finish", () => {
+        console.log("qri2RowStream: <<FINISH>>");
+    }).on("end", () => {
+        console.log("qri2RowStream: <<END>>");
+        console.log("count=" + count);
+    });
+    */
+
+    let csv_stringifier: Transform = csv.stringify();
+    csv_stringifier.write(csvOutputHeaders);
+
+    let ws = fs.createWriteStream("c:/tmp/output.csv");
+
+    rs.pipe(csvParser)
+    .pipe(ssreqts)
+    .pipe(aggregateStream1)
+    .pipe(aggregateStream2)
+    .pipe(multiNormalizationStream)
+    .pipe(unAggregateStream)
+    .pipe(qri2RowStream)
+    .pipe(csv_stringifier)
+    .pipe(ws);
 }).catch((err: any) => {
     console.error("!!! Error: " + JSON.stringify(err));
     process.exit(1);
