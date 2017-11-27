@@ -17,11 +17,17 @@ console.log("AUTH_TOKEN=" + AUTH_TOKEN);
 
 /*
 AWS.config.credentials = new AWS.SharedIniFileCredentials({profile: "zzyzx"});
-let Bucket = "ksfglfgnfg";
-let Key = "fslghlfgs.csv";
 */
 
-let FilePath = process.argv[2];
+type FileSourceType = "local" | "s3";
+
+let FileSourceType = <FileSourceType>(process.argv[2]);
+if (!FileSourceType) {
+    console.error("file source type is not optional");
+    process.exit(1);
+}
+
+let FilePath = process.argv[3];
 if (!FilePath) {
     console.error("csv file path is not optional");
     process.exit(1);
@@ -49,8 +55,22 @@ function getS3SignedUrl(Bucket: string, Key: string) : Promise<string> {
     });
 }
 
-function getFileStream(filePath: string) : Promise<Readable> {return Promise.resolve<Readable>(fs.createReadStream(filePath));}
 function getS3FileStream(Bucket: string, Key: string) : Promise<Readable> {return getS3SignedUrl(Bucket, Key).then((url: string) => getHTTPBlob(url)).then((rc: ReadableContent<Readable>) => Promise.resolve<Readable>(rc.readable));}
+
+// s3Url format: "https://{Bucket}.s3.amazonaws.com/{Key}"
+function getS3ParamsFromUrl(s3Url: string) : {Bucket: string, Key: string} {
+    let parts = url.parse(s3Url);
+    let hostname = parts.hostname;
+    let x = hostname.indexOf(".");
+    let Bucket = hostname.substr(0, x);
+    return {Bucket, Key: parts.pathname.substr(1)};
+}
+function getS3FileStreamFromUrl(s3Url: string) : Promise<Readable> {
+    let {Bucket, Key} = getS3ParamsFromUrl(s3Url);
+    return getS3FileStream(Bucket, Key);
+}
+
+function getFileStream(filePath: string) : Promise<Readable> {return Promise.resolve<Readable>(fs.createReadStream(filePath));}
 
 let ColumnIndices: {[column: string]: number} = {
     "id": 0
@@ -239,8 +259,8 @@ getFileStream(FilePath)
 });
 */
 
-getFileStream(FilePath)
-.then((rs: Readable) => {
+let p = (FileSourceType ===  "local" ? getFileStream(FilePath) : getS3FileStreamFromUrl(FilePath));
+p.then((rs: Readable) => {
     let csvParser: Transform = csv.parse();
     let aggregateStream1 = aggregate(100);
     let aggregateStream2 = aggregate(20);
